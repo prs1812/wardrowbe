@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { usePreferences, useUpdatePreferences, useResetPreferences, useTestAIEndpoint } from '@/lib/hooks/use-preferences';
 import { useUserProfile, useUpdateUserProfile } from '@/lib/hooks/use-user';
 import { CLOTHING_COLORS, OCCASIONS, Preferences, StyleProfile, AIEndpoint } from '@/lib/types';
+import { toF, toCelsius } from '@/lib/temperature';
 import { toast } from 'sonner';
 
 const CM_TO_IN = 0.393701;
@@ -191,6 +192,7 @@ export default function SettingsPage() {
     return 'metric';
   });
 
+
   useEffect(() => {
     if (userProfile) {
       setLocationName(userProfile.location_name || '');
@@ -300,6 +302,27 @@ export default function SettingsPage() {
     locationLon !== (userProfile.location_lon?.toString() || '') ||
     timezone !== (userProfile.timezone || 'UTC')
   );
+
+  const isDirty = hasChanges || measurementsDirty || !!hasLocationChanges;
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    const origPush = history.pushState.bind(history);
+    history.pushState = function (...args) {
+      if (window.confirm('You have unsaved changes. Leave this page?')) {
+        origPush(...args);
+      }
+    };
+
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      history.pushState = origPush;
+    };
+  }, [isDirty]);
 
   const handleToggleUnits = () => {
     const newSystem: UnitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';
@@ -737,6 +760,23 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
+                <Label>Temperature Unit</Label>
+                <Select
+                  value={formData.temperature_unit || 'celsius'}
+                  onValueChange={(v) =>
+                    updateField('temperature_unit', v as 'celsius' | 'fahrenheit')
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="celsius">Celsius (°C)</SelectItem>
+                    <SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>Temperature Sensitivity</Label>
                 <Select
                   value={formData.temperature_sensitivity || 'normal'}
@@ -754,6 +794,8 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Layering Preference</Label>
                 <Select
@@ -774,26 +816,42 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Cold Threshold (°C)</Label>
-                <Input
-                  type="number"
-                  value={formData.cold_threshold ?? 10}
-                  onChange={(e) => updateField('cold_threshold', e.target.value === '' ? 10 : parseInt(e.target.value))}
-                  min={-20}
-                  max={30}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Hot Threshold (°C)</Label>
-                <Input
-                  type="number"
-                  value={formData.hot_threshold ?? 25}
-                  onChange={(e) => updateField('hot_threshold', e.target.value === '' ? 25 : parseInt(e.target.value))}
-                  min={10}
-                  max={45}
-                />
-              </div>
+              {(() => {
+                const unit = formData.temperature_unit || 'celsius';
+                const isFahrenheit = unit === 'fahrenheit';
+                const coldC = formData.cold_threshold ?? 10;
+                const hotC = formData.hot_threshold ?? 25;
+                return (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Cold Threshold ({isFahrenheit ? '°F' : '°C'})</Label>
+                      <Input
+                        type="number"
+                        value={isFahrenheit ? Math.round(toF(coldC)) : coldC}
+                        onChange={(e) => {
+                          const raw = e.target.value === '' ? (isFahrenheit ? 50 : 10) : parseInt(e.target.value);
+                          updateField('cold_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw);
+                        }}
+                        min={isFahrenheit ? -4 : -20}
+                        max={isFahrenheit ? 86 : 30}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Hot Threshold ({isFahrenheit ? '°F' : '°C'})</Label>
+                      <Input
+                        type="number"
+                        value={isFahrenheit ? Math.round(toF(hotC)) : hotC}
+                        onChange={(e) => {
+                          const raw = e.target.value === '' ? (isFahrenheit ? 77 : 25) : parseInt(e.target.value);
+                          updateField('hot_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw);
+                        }}
+                        min={isFahrenheit ? 50 : 10}
+                        max={isFahrenheit ? 113 : 45}
+                      />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>
