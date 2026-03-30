@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.api.auth import create_access_token
 from app.config import get_settings
-from app.database import Base, get_db
+from app.database import get_db
 from app.main import app
 from app.models import User, UserPreference
 
