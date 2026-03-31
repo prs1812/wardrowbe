@@ -96,6 +96,18 @@ class LearningService:
 
         await self.db.commit()
 
+        # Re-fetch outfit with relationships after commit, since commit expires
+        # all loaded attributes and lazy loading is not allowed in async context
+        result = await self.db.execute(
+            select(Outfit)
+            .where(Outfit.id == outfit_id)
+            .options(
+                selectinload(Outfit.feedback),
+                selectinload(Outfit.items).selectinload(OutfitItem.item),
+            )
+        )
+        outfit = result.scalar_one()
+
         # Incremental EMA update instead of full recomputation
         signal = self._get_outfit_signal(outfit)
         await self._update_profile_incremental(user_id, outfit, signal)
