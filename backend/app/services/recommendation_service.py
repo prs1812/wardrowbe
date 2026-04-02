@@ -26,6 +26,7 @@ from app.services.ai_service import AIService
 from app.services.item_scorer import get_season, score_items
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
 from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
+from app.utils.clothing import deduplicate_by_body_slot
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
 
@@ -517,6 +518,7 @@ class RecommendationService:
         occasion: str,
         source: OutfitSource,
         number_map: dict[int, UUID],
+        scheduled_date: date | None = None,
     ) -> Outfit:
         selected_numbers = outfit_data.get("items", [])
         valid_ids = []
@@ -542,6 +544,13 @@ class RecommendationService:
         if not valid_ids:
             raise AIRecommendationError("AI did not select any valid items")
 
+        # Deduplicate by body slot (e.g. prevent shorts + pants)
+        items_result = await self.db.execute(
+            select(ClothingItem.id, ClothingItem.type).where(ClothingItem.id.in_(valid_ids))
+        )
+        item_type_map = {row.id: (row.type or "").lower() for row in items_result}
+        valid_ids = deduplicate_by_body_slot(valid_ids, item_type_map)
+
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
         style_notes = outfit_data.get("styling_tip") or outfit_data.get("style_notes")
 
@@ -549,7 +558,7 @@ class RecommendationService:
             user_id=user.id,
             occasion=occasion,
             weather_data=weather.to_dict(),
-            scheduled_for=get_user_today(user),
+            scheduled_for=scheduled_date or get_user_today(user),
             reasoning=reasoning,
             style_notes=style_notes,
             ai_raw_response=outfit_data,
@@ -603,6 +612,7 @@ class RecommendationService:
         source: OutfitSource = OutfitSource.on_demand,
         time_of_day: str | None = None,
         single_outfit: bool = False,
+        scheduled_date: date | None = None,
     ) -> Outfit:
         exclude_items = exclude_items or []
         include_items = include_items or []
@@ -696,7 +706,13 @@ class RecommendationService:
                 else:
                     logger.info(f"Using cached suggestion for user {user.id}, occasion: {occasion}")
                     return await self._materialize_outfit(
-                        cached, user, weather, occasion, source, number_map
+                        cached,
+                        user,
+                        weather,
+                        occasion,
+                        source,
+                        number_map,
+                        scheduled_date=scheduled_date,
                     )
 
         # Fetch scoring context
@@ -779,7 +795,13 @@ class RecommendationService:
                 outfit_data["_ai_model"] = result.model
                 outfit_data["_ai_endpoint"] = result.endpoint
                 return await self._materialize_outfit(
-                    outfit_data, user, weather, occasion, source, number_map
+                    outfit_data,
+                    user,
+                    weather,
+                    occasion,
+                    source,
+                    number_map,
+                    scheduled_date=scheduled_date,
                 )
 
             # Multi-outfit parse
@@ -790,7 +812,13 @@ class RecommendationService:
             first["_ai_endpoint"] = result.endpoint
 
             outfit = await self._materialize_outfit(
-                first, user, weather, occasion, source, number_map
+                first,
+                user,
+                weather,
+                occasion,
+                source,
+                number_map,
+                scheduled_date=scheduled_date,
             )
 
             # Cache remaining outfits for "Try Another"

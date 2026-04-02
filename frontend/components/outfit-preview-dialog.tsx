@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Loader2, Users, Star, ExternalLink } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Loader2, Users, Star, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -68,9 +68,17 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
         <div className="flex items-center justify-between p-4 pb-2 border-b flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold capitalize">{outfit.occasion} Outfit</h2>
-            <p className="text-sm text-muted-foreground">
-              {currentIndex + 1} / {items.length}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {outfit.scheduled_for && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <CalendarDays className="h-3 w-3" />
+                  {new Date(outfit.scheduled_for + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {currentIndex + 1} / {items.length}
+              </span>
+            </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full -mr-2">
             <X className="h-5 w-5" />
@@ -183,7 +191,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
               </div>
             </div>
             {currentItem.name && (
-              <p className="font-medium">{currentItem.name}</p>
+              <p className="font-medium break-words">{currentItem.name}</p>
             )}
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 mt-1" asChild>
               <Link href={`/dashboard/wardrobe?item=${currentItem.id}`}>
@@ -231,7 +239,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
           {(outfit.reasoning || outfit.highlights || outfit.style_notes) && (
             <div className="border-t p-4 space-y-3">
               {outfit.reasoning && (
-                <p className="font-medium text-foreground">{outfit.reasoning}</p>
+                <p className="font-medium text-foreground break-words">{outfit.reasoning}</p>
               )}
               {outfit.highlights && outfit.highlights.length > 0 && (
                 <ul className="space-y-1.5">
@@ -245,7 +253,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
               )}
               {outfit.style_notes && (
                 <div className="p-3 bg-muted rounded-lg border">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground break-words">
                     <span className="font-medium text-foreground">Tip:</span> {outfit.style_notes}
                   </p>
                 </div>
