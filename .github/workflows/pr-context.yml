@@ -50,13 +50,16 @@ jobs:
             const fs = require('fs');
             const result = JSON.parse(fs.readFileSync('/tmp/cc-result.json', 'utf8'));
 
+            const MIN_SCORE = 0.55;
+
             if (!result.files || result.files.length === 0) {
               core.info('No relevant context files found, skipping comment.');
               return;
             }
 
             const changedFiles = process.env.CHANGED_FILES?.split('\n').filter(Boolean) || [];
-            const contextFiles = result.files.filter(f => !changedFiles.includes(f.path));
+            const contextFiles = result.files
+              .filter(f => f.score >= MIN_SCORE && !changedFiles.includes(f.path));
 
             if (contextFiles.length === 0) {
               core.info('All relevant files are already in the diff, skipping comment.');
@@ -76,7 +79,7 @@ jobs:
               '|------|-----------|--------|',
               rows,
               '',
-              `<sub>${contextFiles.length} context files selected via symbol analysis, dependency graphs, and git history. No LLM calls.</sub>`,
+              `<sub>${contextFiles.length} context files selected — only showing files with relevance ≥ ${MIN_SCORE}. No LLM calls.</sub>`,
             ].join('\n');
 
             await github.rest.issues.createComment({

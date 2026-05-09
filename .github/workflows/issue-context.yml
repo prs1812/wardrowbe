@@ -39,12 +39,15 @@ jobs:
             const fs = require('fs');
             const result = JSON.parse(fs.readFileSync('/tmp/cc-result.json', 'utf8'));
 
-            if (!result.files || result.files.length === 0) {
-              core.info('No relevant files found, skipping comment.');
+            const MIN_SCORE = 0.55;
+            const relevant = (result.files || []).filter(f => f.score >= MIN_SCORE);
+
+            if (relevant.length === 0) {
+              core.info('No files above relevance threshold, skipping comment.');
               return;
             }
 
-            const rows = result.files.slice(0, 15).map(f =>
+            const rows = relevant.slice(0, 15).map(f =>
               `| \`${f.path}\` | ${f.score.toFixed(3)} | ${f.token_count} |`
             ).join('\n');
 
@@ -57,7 +60,7 @@ jobs:
               '|------|-----------|--------|',
               rows,
               '',
-              `<sub>${result.files.length} files selected (${result.total_tokens.toLocaleString()} tokens) via symbol analysis, dependency graphs, and git history. No LLM calls.</sub>`,
+              `<sub>${relevant.length} files selected (${relevant.reduce((s, f) => s + f.token_count, 0).toLocaleString()} tokens) — only showing files with relevance ≥ ${MIN_SCORE}. No LLM calls.</sub>`,
             ].join('\n');
 
             await github.rest.issues.createComment({
